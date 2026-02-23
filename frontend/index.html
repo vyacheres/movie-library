@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Library</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+
+        .navbar {
+            background-color: #16213e !important;
+        }
+
+        .card {
+            background-color: #16213e;
+            border: 1px solid #0f3460;
+            color: #eee;
+        }
+
+        .card-header {
+            background-color: #0f3460;
+        }
+
+        .form-control {
+            background-color: #0f3460;
+            border: 1px solid #1a1a2e;
+            color: #eee;
+        }
+
+        .form-control:focus {
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+
+        .btn-primary {
+            background-color: #e94560;
+            border-color: #e94560;
+        }
+
+        .btn-primary:hover {
+            background-color: #c73e54;
+            border-color: #c73e54;
+        }
+
+        .btn-outline-light {
+            border-color: #e94560;
+            color: #e94560;
+        }
+
+        .btn-outline-light:hover {
+            background-color: #e94560;
+            color: white;
+        }
+
+        .movie-card {
+            transition: transform 0.2s;
+        }
+
+        .movie-card:hover {
+            transform: scale(1.02);
+        }
+
+        .rating {
+            color: #ffd700;
+        }
+
+        .nav-link {
+            color: #eee !important;
+        }
+
+        .nav-link.active {
+            color: #e94560 !important;
+        }
+
+        .modal-content {
+            background-color: #16213e;
+            color: #eee;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .modal-footer {
+            border-top: 1px solid #0f3460;
+        }
+
+        .dropdown-menu {
+            background-color: #16213e;
+            border: 1px solid #0f3460;
+        }
+
+        .dropdown-item {
+            color: #eee;
+        }
+
+        .dropdown-item:hover {
+            background-color: #0f3460;
+            color: #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const API_URL = 'http://127.0.0.1:8000/api/v1';
+
+        // Auth Context
+        const AuthContext = React.createContext();
+
+        // API Helper
+        const api = async (endpoint, options = {}) => {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token && { Authorization: `Bearer ${token}` }),
+                ...options.headers
+            };
+
+            const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                window.location.reload();
+            }
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Something went wrong');
+            }
+
+            return response.json();
+        };
+
+        // Login Component
+        function Login({ onLogin }) {
+            const [isRegister, setIsRegister] = React.useState(false);
+            const [formData, setFormData] = React.useState({
+                username: '',
+                password: '',
+                email: '',
+                full_name: ''
+            });
+            const [error, setError] = React.useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+
+                try {
+                    if (isRegister) {
+                        await api('/auth/register', {
+                            method: 'POST',
+                            body: JSON.stringify(formData)
+                        });
+                        setIsRegister(false);
+                        alert('Registration successful! Please login.');
+                    } else {
+                        // Для login используем form-data формат
+                        const formBody = new URLSearchParams();
+                        formBody.append('username', formData.username);
+                        formBody.append('password', formData.password);
+
+                        const response = await fetch(`${API_URL}/auth/login`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: formBody.toString()
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.detail || 'Login failed');
+                        }
+
+                        const data = await response.json();
+                        localStorage.setItem('token', data.access_token);
+                        onLogin();
+                    }
+                } catch (err) {
+                    setError(err.message);
+                }
+            };
+
+            return (
+                <div className="container mt-5">
+                    <div className="row justify-content-center">
+                        <div className="col-md-6">
+                            <div className="card">
+                                <div className="card-header">
+                                    <h3 className="text-center">{isRegister ? 'Register' : 'Login'}</h3>
+                                </div>
+                                <div className="card-body">
+                                    {error && <div className="alert alert-danger">{error}</div>}
+                                    <form onSubmit={handleSubmit}>
+                                        <div className="mb-3">
+                                            <label className="form-label">Username</label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={formData.username}
+                                                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        {isRegister && (
+                                            <>
+                                                <div className="mb-3">
+                                                    <label className="form-label">Email</label>
+                                                    <input
+                                                        type="email"
+                                                        className="form-control"
+                                                        value={formData.email}
+                                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="mb-3">
+                                                    <label className="form-label">Full Name</label>
+                                                    <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        value={formData.full_name}
+                                                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                        <div className="mb-3">
+                                            <label className="form-label">Password</label>
+                                            <input
+                                                type="password"
+                                                className="form-control"
+                                                value={formData.password}
+                                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                        <button type="submit" className="btn btn-primary w-100">
+                                            {isRegister ? 'Register' : 'Login'}
+                                        </button>
+                                    </form>
+                                    <div className="text-center mt-3">
+                                        <button
+                                            className="btn btn-link"
+                                            onClick={() => setIsRegister(!isRegister)}
+                                        >
+                                            {isRegister ? 'Already have an account? Login' : "Don't have an account? Register"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Navbar Component
+        function Navbar({ user, onLogout, setActiveTab }) {
+            return (
+                <nav className="navbar navbar-expand-lg navbar-dark">
+                    <div className="container">
+                        <a className="navbar-brand" href="#" onClick={() => setActiveTab('movies')}>
+                            🎬 Movie Library
+                        </a>
+                        <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                            <span className="navbar-toggler-icon"></span>
+                        </button>
+                        <div className="collapse navbar-collapse" id="navbarNav">
+                            <ul className="navbar-nav me-auto">
+                                <li className="nav-item">
+                                    <a className="nav-link" href="#" onClick={() => setActiveTab('movies')}>Movies</a>
+                                </li>
+                                <li className="nav-item">
+                                    <a className="nav-link" href="#" onClick={() => setActiveTab('favorites')}>Favorites</a>
+                                </li>
+                                {user?.is_superuser && (
+                                    <>
+                                        <li className="nav-item">
+                                            <a className="nav-link" href="#" onClick={() => setActiveTab('genres')}>Genres</a>
+                                        </li>
+                                        <li className="nav-item">
+                                            <a className="nav-link" href="#" onClick={() => setActiveTab('directors')}>Directors</a>
+                                        </li>
+                                    </>
+                                )}
+                            </ul>
+                            <div className="d-flex align-items-center">
+                                <span className="me-3">{user?.username}</span>
+                                <button className="btn btn-outline-light btn-sm" onClick={onLogout}>Logout</button>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            );
+        }
+
+        // Movies Component
+        function Movies({ isSuperuser }) {
+            const [movies, setMovies] = React.useState([]);
+            const [genres, setGenres] = React.useState([]);
+            const [directors, setDirectors] = React.useState([]);
+            const [showModal, setShowModal] = React.useState(false);
+            const [showDetailModal, setShowDetailModal] = React.useState(false);
+            const [selectedMovie, setSelectedMovie] = React.useState(null);
+            const [formData, setFormData] = React.useState({
+                title: '',
+                description: '',
+                release_date: '',
+                duration: '',
+                rating: '',
+                genre_id: '',
+                director_id: ''
+            });
+
+            React.useEffect(() => {
+                loadMovies();
+                loadGenres();
+                loadDirectors();
+            }, []);
+
+            const loadMovies = async () => {
+                try {
+                    const data = await api('/movies/');
+                    setMovies(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const loadGenres = async () => {
+                try {
+                    const data = await api('/genres/');
+                    setGenres(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const loadDirectors = async () => {
+                try {
+                    const data = await api('/directors/');
+                    setDirectors(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api('/movies/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...formData,
+                            release_date: formData.release_date || null,
+                            duration: formData.duration ? parseInt(formData.duration) : null,
+                            rating: formData.rating ? parseFloat(formData.rating) : null,
+                            genre_id: parseInt(formData.genre_id),
+                            director_id: parseInt(formData.director_id)
+                        })
+                    });
+                    setShowModal(false);
+                    loadMovies();
+                    setFormData({
+                        title: '',
+                        description: '',
+                        release_date: '',
+                        duration: '',
+                        rating: '',
+                        genre_id: '',
+                        director_id: ''
+                    });
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            const addToFavorites = async (movieId) => {
+                try {
+                    await api('/favorites/', {
+                        method: 'POST',
+                        body: JSON.stringify({ movie_id: movieId })
+                    });
+                    alert('Added to favorites!');
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            const openMovieDetail = (movie) => {
+                setSelectedMovie(movie);
+                setShowDetailModal(true);
+            };
+
+            return (
+                <div className="container mt-4">
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Movies</h2>
+                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                            + Add Movie
+                        </button>
+                    </div>
+
+                    <div className="row">
+                        {movies.map(movie => (
+                            <div key={movie.id} className="col-md-4 mb-4">
+                                <div className="card movie-card h-100">
+                                    <div className="card-body">
+                                        <h5 className="card-title">{movie.title}</h5>
+                                        <p className="card-text">{movie.description?.substring(0, 100)}...</p>
+                                        <p className="mb-1">
+                                            <strong>Genre:</strong> {movie.genre?.name || 'N/A'}
+                                        </p>
+                                        <p className="mb-1">
+                                            <strong>Director:</strong> {movie.director ? `${movie.director.first_name} ${movie.director.last_name}` : 'N/A'}
+                                        </p>
+                                        <p className="mb-1">
+                                            <strong>Year:</strong> {movie.release_date ? movie.release_date.split('T')[0] : 'N/A'}
+                                        </p>
+                                        <p className="mb-2 rating">
+                                            <strong>★</strong> {movie.rating || 'N/A'}
+                                        </p>
+                                        <div className="d-flex gap-2">
+                                            <button
+                                                className="btn btn-outline-light btn-sm flex-grow-1"
+                                                onClick={() => openMovieDetail(movie)}
+                                            >
+                                                Details
+                                            </button>
+                                            <button
+                                                className="btn btn-outline-light btn-sm"
+                                                onClick={() => addToFavorites(movie.id)}
+                                            >
+                                                ♡
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Movie Detail Modal */}
+                    {showDetailModal && selectedMovie && (
+                        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}>
+                            <div className="modal-dialog modal-lg">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title">{selectedMovie.title}</h5>
+                                        <button type="button" className="btn-close" onClick={() => setShowDetailModal(false)}></button>
+                                    </div>
+                                    <div className="modal-body">
+                                        <div className="row">
+                                            <div className="col-12">
+                                                <h6 className="text-muted">Description</h6>
+                                                <p>{selectedMovie.description || 'No description available'}</p>
+
+                                                <h6 className="text-muted mt-3">Details</h6>
+                                                <p><strong>Genre:</strong> {selectedMovie.genre?.name || 'N/A'}</p>
+                                                <p><strong>Director:</strong> {selectedMovie.director ? `${selectedMovie.director.first_name} ${selectedMovie.director.last_name}` : 'N/A'}</p>
+                                                <p><strong>Biography:</strong> {selectedMovie.director?.biography || 'N/A'}</p>
+                                                <p><strong>Release Date:</strong> {selectedMovie.release_date ? selectedMovie.release_date.split('T')[0] : 'N/A'}</p>
+                                                <p><strong>Duration:</strong> {selectedMovie.duration ? `${selectedMovie.duration} min` : 'N/A'}</p>
+                                                <p className="rating"><strong>Rating:</strong> ★ {selectedMovie.rating || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="modal-footer">
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => addToFavorites(selectedMovie.id)}
+                                        >
+                                            ♡ Add to Favorites
+                                        </button>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setShowDetailModal(false)}>Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showModal && (
+                        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title">Add Movie</h5>
+                                        <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+                                    </div>
+                                    <form onSubmit={handleSubmit}>
+                                        <div className="modal-body">
+                                            <div className="mb-3">
+                                                <label className="form-label">Title</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    value={formData.title}
+                                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Description</label>
+                                                <textarea
+                                                    className="form-control"
+                                                    value={formData.description}
+                                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Release Date</label>
+                                                <input
+                                                    type="date"
+                                                    className="form-control"
+                                                    value={formData.release_date}
+                                                    onChange={(e) => setFormData({ ...formData, release_date: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Duration (minutes)</label>
+                                                <input
+                                                    type="number"
+                                                    className="form-control"
+                                                    value={formData.duration}
+                                                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Rating</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    max="10"
+                                                    className="form-control"
+                                                    value={formData.rating}
+                                                    onChange={(e) => setFormData({ ...formData, rating: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Genre</label>
+                                                <select
+                                                    className="form-control"
+                                                    value={formData.genre_id}
+                                                    onChange={(e) => setFormData({ ...formData, genre_id: e.target.value })}
+                                                    required
+                                                >
+                                                    <option value="">Select Genre</option>
+                                                    {genres.map(g => (
+                                                        <option key={g.id} value={g.id}>{g.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Director</label>
+                                                <select
+                                                    className="form-control"
+                                                    value={formData.director_id}
+                                                    onChange={(e) => setFormData({ ...formData, director_id: e.target.value })}
+                                                    required
+                                                >
+                                                    <option value="">Select Director</option>
+                                                    {directors.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.first_name} {d.last_name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                                            <button type="submit" className="btn btn-primary">Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Favorites Component
+        function Favorites() {
+            const [favorites, setFavorites] = React.useState([]);
+
+            React.useEffect(() => {
+                loadFavorites();
+            }, []);
+
+            const loadFavorites = async () => {
+                try {
+                    const data = await api('/favorites/');
+                    setFavorites(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const removeFavorite = async (id) => {
+                try {
+                    await api(`/favorites/${id}`, { method: 'DELETE' });
+                    loadFavorites();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            return (
+                <div className="container mt-4">
+                    <h2>My Favorites</h2>
+                    <div className="row">
+                        {favorites.length === 0 ? (
+                            <div className="col-12">
+                                <p className="text-center">No favorites yet. Add some movies!</p>
+                            </div>
+                        ) : favorites.map(fav => (
+                            <div key={fav.id} className="col-md-4 mb-4">
+                                <div className="card h-100">
+                                    <div className="card-body">
+                                        <h5 className="card-title">{fav.movie?.title}</h5>
+                                        <p className="mb-1">
+                                            <strong>Genre:</strong> {fav.movie?.genre?.name || 'N/A'}
+                                        </p>
+                                        <p className="mb-1">
+                                            <strong>Director:</strong> {fav.movie?.director ? `${fav.movie.director.first_name} ${fav.movie.director.last_name}` : 'N/A'}
+                                        </p>
+                                        <p className="mb-2 rating">
+                                            <strong>★</strong> {fav.movie?.rating || 'N/A'}
+                                        </p>
+                                        <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            onClick={() => removeFavorite(fav.id)}
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Genres Component
+        function Genres() {
+            const [genres, setGenres] = React.useState([]);
+            const [showModal, setShowModal] = React.useState(false);
+            const [newGenre, setNewGenre] = React.useState('');
+
+            React.useEffect(() => {
+                loadGenres();
+            }, []);
+
+            const loadGenres = async () => {
+                try {
+                    const data = await api('/genres/');
+                    setGenres(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api('/genres/', {
+                        method: 'POST',
+                        body: JSON.stringify({ name: newGenre })
+                    });
+                    setShowModal(false);
+                    setNewGenre('');
+                    loadGenres();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            const deleteGenre = async (id) => {
+                try {
+                    await api(`/genres/${id}`, { method: 'DELETE' });
+                    loadGenres();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            return (
+                <div className="container mt-4">
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Genres</h2>
+                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                            + Add Genre
+                        </button>
+                    </div>
+                    <div className="row">
+                        {genres.map(genre => (
+                            <div key={genre.id} className="col-md-3 mb-3">
+                                <div className="card">
+                                    <div className="card-body d-flex justify-content-between align-items-center">
+                                        <span>{genre.name}</span>
+                                        <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            onClick={() => deleteGenre(genre.id)}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {showModal && (
+                        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title">Add Genre</h5>
+                                        <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+                                    </div>
+                                    <form onSubmit={handleSubmit}>
+                                        <div className="modal-body">
+                                            <div className="mb-3">
+                                                <label className="form-label">Genre Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    value={newGenre}
+                                                    onChange={(e) => setNewGenre(e.target.value)}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                                            <button type="submit" className="btn btn-primary">Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Directors Component
+        function Directors() {
+            const [directors, setDirectors] = React.useState([]);
+            const [showModal, setShowModal] = React.useState(false);
+            const [formData, setFormData] = React.useState({
+                first_name: '',
+                last_name: '',
+                biography: ''
+            });
+
+            React.useEffect(() => {
+                loadDirectors();
+            }, []);
+
+            const loadDirectors = async () => {
+                try {
+                    const data = await api('/directors/');
+                    setDirectors(data);
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api('/directors/', {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    });
+                    setShowModal(false);
+                    setFormData({ first_name: '', last_name: '', biography: '' });
+                    loadDirectors();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            const deleteDirector = async (id) => {
+                try {
+                    await api(`/directors/${id}`, { method: 'DELETE' });
+                    loadDirectors();
+                } catch (err) {
+                    alert(err.message);
+                }
+            };
+
+            return (
+                <div className="container mt-4">
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Directors</h2>
+                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                            + Add Director
+                        </button>
+                    </div>
+                    <div className="row">
+                        {directors.map(director => (
+                            <div key={director.id} className="col-md-4 mb-4">
+                                <div className="card h-100">
+                                    <div className="card-body">
+                                        <h5 className="card-title">{director.first_name} {director.last_name}</h5>
+                                        <p className="card-text">{director.biography}</p>
+                                        <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            onClick={() => deleteDirector(director.id)}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {showModal && (
+                        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <div className="modal-dialog">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title">Add Director</h5>
+                                        <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+                                    </div>
+                                    <form onSubmit={handleSubmit}>
+                                        <div className="modal-body">
+                                            <div className="mb-3">
+                                                <label className="form-label">First Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    value={formData.first_name}
+                                                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Last Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    value={formData.last_name}
+                                                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="mb-3">
+                                                <label className="form-label">Biography</label>
+                                                <textarea
+                                                    className="form-control"
+                                                    value={formData.biography}
+                                                    onChange={(e) => setFormData({ ...formData, biography: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="modal-footer">
+                                            <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                                            <button type="submit" className="btn btn-primary">Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Main App
+        function App() {
+            const [user, setUser] = React.useState(null);
+            const [activeTab, setActiveTab] = React.useState('movies');
+            const [loading, setLoading] = React.useState(true);
+
+            React.useEffect(() => {
+                checkAuth();
+            }, []);
+
+            const checkAuth = async () => {
+                const token = localStorage.getItem('token');
+                if (token) {
+                    try {
+                        const userData = await api('/users/me');
+                        setUser(userData);
+                    } catch (err) {
+                        localStorage.removeItem('token');
+                    }
+                }
+                setLoading(false);
+            };
+
+            const handleLogin = () => {
+                checkAuth();
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('token');
+                setUser(null);
+            };
+
+            if (loading) {
+                return <div className="text-center mt-5">Loading...</div>;
+            }
+
+            if (!user) {
+                return <Login onLogin={handleLogin} />;
+            }
+
+            return (
+                <>
+                    <Navbar user={user} onLogout={handleLogout} setActiveTab={setActiveTab} />
+                    {activeTab === 'movies' && <Movies isSuperuser={user.is_superuser} />}
+                    {activeTab === 'favorites' && <Favorites />}
+                    {activeTab === 'genres' && user.is_superuser && <Genres />}
+                    {activeTab === 'directors' && user.is_superuser && <Directors />}
+                </>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
