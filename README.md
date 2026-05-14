@@ -258,6 +258,10 @@ movie_library_project/
 ├── frontend/
 │   └── index.html               # React SPA
 ├── tests/
+│   ├── conftest.py
+│   ├── api/
+│   ├── crud/
+│   └── unit/
 ├── .env.example
 ├── requirements.txt
 └── README.md
@@ -269,11 +273,41 @@ movie_library_project/
 
 ## Тесты
 
+Запуск всех тестов:
+
 ```bash
 python -m pytest tests/ -q
 ```
 
-В CI локально перед прогоном убедитесь, что для импорта приложения задан `SECRET_KEY` (в тестах значение подставляет `conftest.py`).
+**Инфраструктура:** `tests/conftest.py` — отдельная SQLite, транзакция на тест с откатом, подмена `get_db` у приложения для `TestClient`; задаётся тестовый `SECRET_KEY`. Перед/после каждого теста сбрасывается in-memory счётчик **rate limit** на `/auth/login`, чтобы сценарии не мешали друг другу.
+
+**Вспомогательная функция** `api_login(client, username, password)` — получение `access_token` после успешного логина.
+
+### Перечень тестов (что покрывают)
+
+| Файл | Тест | Назначение |
+|------|------|------------|
+| `tests/api/test_auth.py` | `test_register_user` | Успешная регистрация через HTTP, запись пользователя в БД. |
+| | `test_login_user` | Логин по OAuth2 form-data, в ответе есть `access_token` и тип `bearer`. |
+| | `test_register_ignores_superuser_flag` | В теле регистрации передан `is_superuser: true` — в БД пользователь **не** суперпользователь. |
+| `tests/api/test_users_api.py` | `test_users_me_without_token_returns_401` | `GET /users/me` без заголовка `Authorization` → 401. |
+| | `test_users_me_with_invalid_token_returns_401` | Невалидный JWT → 401. |
+| | `test_users_me_with_valid_token_and_jwt_sub_is_user_id` | Валидный токен: в payload `sub` — числовой id; `GET /users/me` возвращает того же пользователя. |
+| `tests/api/test_movies_authz.py` | `test_create_movie_forbidden_for_regular_user` | Обычный пользователь не может `POST /movies/` (ожидается 403). |
+| | `test_create_movie_allowed_for_superuser` | Суперпользователь успешно создаёт фильм (`201`). |
+| `tests/api/test_favorites_api.py` | `test_add_favorite_movie_not_found` | Добавление в избранное с несуществующим `movie_id` → 404. |
+| | `test_add_favorite_duplicate_returns_400` | Повторное добавление того же фильма → 400. |
+| | `test_delete_other_users_favorite_returns_403` | Пользователь B не может удалить запись избранного пользователя A → 403. |
+| `tests/api/test_login_rate_limit.py` | `test_login_rate_limit_returns_429` | 30 неудачных попыток логина → 401; 31-я с того же клиента → **429** (лимит по IP). |
+| `tests/crud/test_user_crud.py` | `test_create_user` | CRUD-создание пользователя, поля и `is_superuser is False`. |
+| | `test_get_user` | Чтение пользователя по `id` после создания. |
+| `tests/crud/test_user_update.py` | `test_user_update_rehashes_password` | `CRUDUser.update` с новым паролем обновляет `hashed_password`; старый пароль не проходит проверку, новый — да. |
+| `tests/unit/test_security.py` | `test_password_hashing` | bcrypt: хеширование и `verify_password`. |
+| | `test_jwt_creation` | Создание JWT с `sub`, успешное декодирование. |
+
+Всего **17** тестов.
+
+В CI локально перед прогоном убедитесь, что для импорта приложения задан `SECRET_KEY` (в тестах значение по умолчанию подставляет `conftest.py`).
 
 ---
 
@@ -544,6 +578,10 @@ movie_library_project/
 ├── frontend/
 │   └── index.html               # React SPA
 ├── tests/
+│   ├── conftest.py
+│   ├── api/
+│   ├── crud/
+│   └── unit/
 ├── .env.example
 ├── requirements.txt
 └── README.md
@@ -555,11 +593,41 @@ movie_library_project/
 
 ## Tests
 
+Run the full suite:
+
 ```bash
 python -m pytest tests/ -q
 ```
 
-`conftest.py` sets `SECRET_KEY` for imports; ensure it is available when running tests in CI.
+**Infrastructure:** `tests/conftest.py` — isolated SQLite, per-test transaction rollback, `get_db` override for `TestClient`, test `SECRET_KEY`. The in-memory **login rate limit** bucket is cleared before and after every test so scenarios do not interfere.
+
+**Helper:** `api_login(client, username, password)` returns an `access_token` after a successful login.
+
+### Test inventory (coverage)
+
+| File | Test | Purpose |
+|------|------|---------|
+| `tests/api/test_auth.py` | `test_register_user` | HTTP registration succeeds and persists the user. |
+| | `test_login_user` | OAuth2 form login returns `access_token` and `bearer` type. |
+| | `test_register_ignores_superuser_flag` | Body contains `is_superuser: true` but DB user is **not** a superuser. |
+| `tests/api/test_users_api.py` | `test_users_me_without_token_returns_401` | `GET /users/me` with no `Authorization` → 401. |
+| | `test_users_me_with_invalid_token_returns_401` | Invalid JWT → 401. |
+| | `test_users_me_with_valid_token_and_jwt_sub_is_user_id` | Valid token: payload `sub` is numeric id; `GET /users/me` matches that user. |
+| `tests/api/test_movies_authz.py` | `test_create_movie_forbidden_for_regular_user` | Regular user cannot `POST /movies/` (403). |
+| | `test_create_movie_allowed_for_superuser` | Superuser creates a movie successfully (`201`). |
+| `tests/api/test_favorites_api.py` | `test_add_favorite_movie_not_found` | Favorite with unknown `movie_id` → 404. |
+| | `test_add_favorite_duplicate_returns_400` | Adding the same movie twice → 400. |
+| | `test_delete_other_users_favorite_returns_403` | User B cannot delete user A’s favorite row → 403. |
+| `tests/api/test_login_rate_limit.py` | `test_login_rate_limit_returns_429` | 30 failed logins → 401; 31st from the same client → **429** (per-IP limit). |
+| `tests/crud/test_user_crud.py` | `test_create_user` | CRUD user create, fields, `is_superuser is False`. |
+| | `test_get_user` | Fetch user by `id` after create. |
+| `tests/crud/test_user_update.py` | `test_user_update_rehashes_password` | `CRUDUser.update` with a new password updates `hashed_password`; old password fails verification, new one passes. |
+| `tests/unit/test_security.py` | `test_password_hashing` | bcrypt hash and `verify_password`. |
+| | `test_jwt_creation` | JWT with `sub` encodes and decodes correctly. |
+
+**17** tests total.
+
+Ensure `SECRET_KEY` is available when importing the app in CI (the default in `conftest.py` is enough for local runs).
 
 ---
 

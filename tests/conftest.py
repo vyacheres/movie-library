@@ -12,9 +12,11 @@ os.environ.setdefault(
 )
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
 from app.db.base_class import Base
 from app.main import app
 
@@ -46,7 +48,6 @@ def db(db_engine):
 
 @pytest.fixture(scope="function")
 def client(db):
-    from fastapi.testclient import TestClient
     from app.db.session import get_db as get_db_session
 
     test_app = app
@@ -60,3 +61,23 @@ def client(db):
         test_app.dependency_overrides[get_db_session] = original_get_db
     else:
         test_app.dependency_overrides.pop(get_db_session, None)
+
+
+@pytest.fixture(autouse=True)
+def reset_login_rate_limit_state():
+    """Сброс in-memory счётчика логина между тестами (иначе 429 «протекает»)."""
+    from app.core import rate_limit
+
+    rate_limit._buckets.clear()
+    yield
+    rate_limit._buckets.clear()
+
+
+def api_login(client: TestClient, username: str, password: str) -> str:
+    """POST /auth/login (OAuth2 form), возвращает access_token."""
+    r = client.post(
+        f"{settings.API_V1_STR}/auth/login",
+        data={"username": username, "password": password},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["access_token"]

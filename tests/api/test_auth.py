@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from app.schemas.user import UserCreate
 from app.crud.user import crud_user
 from app.core.config import settings
+
+
 def test_register_user(client: TestClient, db: Session):
     response = client.post(
         f"{settings.API_V1_STR}/auth/register",
