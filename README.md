@@ -8,18 +8,67 @@
 
 ## Оглавление
 
-1. [Быстрый старт](#quick-start)
-2. [Нововведения и безопасность](#changelog-security)
-3. [Функционал](#features)
-4. [Технологии](#tech-stack)
+1. [Функционал](#features)
+2. [Технологии](#tech-stack)
+3. [API (кратко)](#api-summary)
+4. [Быстрый старт](#quick-start)
 5. [Запуск backend и frontend](#run)
 6. [Конфигурация (.env)](#configuration)
-7. [Учётные данные для тестов](#credentials)
-8. [API (кратко)](#api-summary)
-9. [Структура проекта](#project-structure)
-10. [Тесты](#tests)
-11. [Дополнительно](#more)
-12. [English (duplicate below)](#english)
+7. [Нововведения и безопасность](#changelog-security)
+8. [Структура проекта](#project-structure)
+9. [Тесты](#tests)
+10. [English (duplicate below)](#english)
+
+---
+
+<a id="features"></a>
+
+## Функционал
+
+### Backend (FastAPI)
+
+- Вход и регистрация, JWT, профиль текущего пользователя.
+- CRUD: пользователи, фильмы, жанры, режиссёры, избранное.
+- Разделение прав: обычный пользователь и суперпользователь (создание/изменение каталога, жанров, режиссёров).
+- SQLite по умолчанию; смена строки подключения через `DATABASE_URL` в `.env`.
+- Swagger UI и ReDoc.
+
+### Frontend (React SPA)
+
+- Тёмная тема, карточки фильмов, избранное, модальные окна.
+- Разделы жанров и режиссёров и добавление фильмов — у суперпользователя.
+
+---
+
+<a id="tech-stack"></a>
+
+## Технологии
+
+| Слой | Стек |
+|------|------|
+| Backend | FastAPI, SQLAlchemy 2, Pydantic v2, python-jose, Passlib (bcrypt), uvicorn |
+| Данные | SQLite (по умолчанию) |
+| Frontend | React 18 (UMD), Bootstrap 5, Babel standalone |
+
+---
+
+<a id="api-summary"></a>
+
+## API (кратко)
+
+Префикс версии: **`/api/v1`**.
+
+| Метод | Путь | Назначение |
+|--------|------|------------|
+| POST | `/auth/register` | Регистрация |
+| POST | `/auth/login` | Получение JWT |
+| GET | `/users/me` | Текущий пользователь |
+| GET/POST | `/movies/` | Список / создание фильма |
+| GET/POST/PUT/DELETE | `/genres/`, `/genres/{id}` | Жанры |
+| GET/POST/PUT/DELETE | `/directors/`, `/directors/{id}` | Режиссёры |
+| GET/POST/DELETE | `/favorites/` | Избранное |
+
+Полное описание полей и схем — в **Swagger**: `/docs`.
 
 ---
 
@@ -40,6 +89,51 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Интерфейс: [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/) — тот же origin, что и API (удобно для CORS). Документация API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+---
+
+<a id="run"></a>
+
+## Запуск backend и frontend
+
+**Вариант A — один сервер (рекомендуется)**  
+Backend отдаёт UI по адресу `/ui/`:
+
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Откройте [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/).
+
+**Вариант B — отдельный статический сервер для HTML**  
+Например, порт 8080:
+
+```bash
+cd frontend
+python -m http.server 8080
+```
+
+Добавьте origin фронта в **`BACKEND_CORS_ORIGINS`** в `.env` (например `http://127.0.0.1:8080`), иначе браузер заблокирует запросы с авторизацией.
+
+Альтернатива backend:
+
+```bash
+python run.py
+```
+
+---
+
+<a id="configuration"></a>
+
+## Конфигурация (.env)
+
+| Переменная | Назначение |
+|------------|------------|
+| `SECRET_KEY` | Обязательно, ≥ 32 символов, подпись JWT. |
+| `DATABASE_URL` | Опционально, по умолчанию SQLite в корне проекта. |
+| `BACKEND_CORS_ORIGINS` | Список origin через запятую для CORS. |
+
+Полный пример см. в **`.env.example`**.
 
 ---
 
@@ -112,123 +206,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | **Регистрация** | На сервер уходит явный набор полей без лишних ключей из формы. |
 | **Кнопка «Add Movie»** | Отображается только у **суперпользователя**; справочники жанров и режиссёров для формы подгружаются также только ему. |
 
-### Тесты
-
-| Изменение | Описание |
-|-----------|----------|
-| **`tests/conftest.py`** | Перед импортом приложения выставляется тестовый **`SECRET_KEY`**; для подмены БД используется тот же **`get_db`**, что и в эндпоинтах. |
-| **Новый тест** | Проверка, что флаг суперпользователя в теле регистрации **не** повышает права. |
-
 > Старые JWT, где в `sub` было имя пользователя, после обновления **перестают действовать** — выполните вход заново.
-
----
-
-<a id="features"></a>
-
-## Функционал
-
-### Backend (FastAPI)
-
-- Вход и регистрация, JWT, профиль текущего пользователя.
-- CRUD: пользователи, фильмы, жанры, режиссёры, избранное.
-- Разделение прав: обычный пользователь и суперпользователь (создание/изменение каталога, жанров, режиссёров).
-- SQLite по умолчанию; смена строки подключения через `DATABASE_URL` в `.env`.
-- Swagger UI и ReDoc.
-
-### Frontend (React SPA)
-
-- Тёмная тема, карточки фильмов, избранное, модальные окна.
-- Разделы жанров и режиссёров и добавление фильмов — у суперпользователя.
-
----
-
-<a id="tech-stack"></a>
-
-## Технологии
-
-| Слой | Стек |
-|------|------|
-| Backend | FastAPI, SQLAlchemy 2, Pydantic v2, python-jose, Passlib (bcrypt), uvicorn |
-| Данные | SQLite (по умолчанию) |
-| Frontend | React 18 (UMD), Bootstrap 5, Babel standalone |
-
----
-
-<a id="run"></a>
-
-## Запуск backend и frontend
-
-**Вариант A — один сервер (рекомендуется)**  
-Backend отдаёт UI по адресу `/ui/`:
-
-```bash
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Откройте [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/).
-
-**Вариант B — отдельный статический сервер для HTML**  
-Например, порт 8080:
-
-```bash
-cd frontend
-python -m http.server 8080
-```
-
-Добавьте origin фронта в **`BACKEND_CORS_ORIGINS`** в `.env` (например `http://127.0.0.1:8080`), иначе браузер заблокирует запросы с авторизацией.
-
-Альтернатива backend:
-
-```bash
-python run.py
-```
-
----
-
-<a id="configuration"></a>
-
-## Конфигурация (.env)
-
-| Переменная | Назначение |
-|------------|------------|
-| `SECRET_KEY` | Обязательно, ≥ 32 символов, подпись JWT. |
-| `DATABASE_URL` | Опционально, по умолчанию SQLite в корне проекта. |
-| `BACKEND_CORS_ORIGINS` | Список origin через запятую для CORS. |
-
-Полный пример см. в **`.env.example`**.
-
----
-
-<a id="credentials"></a>
-
-## Учётные данные для тестов
-
-Для ручной проверки (если пользователь уже создан в вашей БД):
-
-- Логин: `testuser`  
-- Пароль: `admin123`  
-
-Роль суперпользователя задаётся в базе, не через публичную регистрацию.
-
----
-
-<a id="api-summary"></a>
-
-## API (кратко)
-
-Префикс версии: **`/api/v1`**.
-
-| Метод | Путь | Назначение |
-|--------|------|------------|
-| POST | `/auth/register` | Регистрация |
-| POST | `/auth/login` | Получение JWT |
-| GET | `/users/me` | Текущий пользователь |
-| GET/POST | `/movies/` | Список / создание фильма |
-| GET/POST/PUT/DELETE | `/genres/`, `/genres/{id}` | Жанры |
-| GET/POST/PUT/DELETE | `/directors/`, `/directors/{id}` | Режиссёры |
-| GET/POST/DELETE | `/favorites/` | Избранное |
-
-Полное описание полей и схем — в **Swagger**: `/docs`.
 
 ---
 
@@ -238,32 +216,68 @@ python run.py
 
 ```
 movie_library_project/
+├── main.py                      # запуск uvicorn на 0.0.0.0:8000
+├── run.py                       # dev-запуск с autoreload на 127.0.0.1
+├── requirements.txt             # зависимости Python
+├── .env.example                 # образец переменных окружения (без секретов)
 ├── app/
+│   ├── main.py                  # FastAPI: CORS, корень /, раздача /ui/, OpenAPI
 │   ├── api/
-│   │   ├── api.py
-│   │   ├── dependencies.py      # JWT → текущий пользователь
-│   │   └── endpoints/             # auth, users, movies, genres, directors, favorites
+│   │   ├── api.py               # подключение роутеров под /api/v1
+│   │   ├── dependencies.py      # JWT → текущий пользователь / суперпользователь
+│   │   └── endpoints/
+│   │       ├── auth.py          # регистрация и логин
+│   │       ├── users.py         # профиль /me и управление пользователями
+│   │       ├── movies.py        # список и CRUD фильмов (права супера)
+│   │       ├── genres.py        # жанры
+│   │       ├── directors.py     # режиссёры
+│   │       └── favorites.py     # избранное
 │   ├── core/
-│   │   ├── config.py            # настройки из .env
-│   │   ├── rate_limit.py        # лимит запросов на login
-│   │   └── security.py          # bcrypt, JWT
+│   │   ├── config.py            # настройки из .env (SECRET_KEY, CORS, БД)
+│   │   ├── rate_limit.py        # ограничение частоты POST /login по IP
+│   │   └── security.py          # bcrypt и выпуск JWT
 │   ├── crud/
+│   │   ├── base.py              # базовый CRUD по модели
+│   │   ├── user.py              # операции с пользователями
+│   │   ├── movie.py             # операции с фильмами
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   └── favorite.py
 │   ├── db/
-│   │   ├── session.py           # engine, SessionLocal, get_db
-│   │   └── ...
+│   │   ├── base.py              # регистрация моделей в metadata
+│   │   ├── base_class.py        # DeclarativeBase для ORM
+│   │   └── session.py           # engine, SessionLocal, зависимость get_db
 │   ├── models/
+│   │   ├── __init__.py          # экспорт моделей SQLAlchemy
+│   │   ├── user.py
+│   │   ├── movie.py
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   └── favorite.py
 │   ├── schemas/
-│   ├── services/auth.py
-│   └── main.py                  # FastAPI, CORS, /ui/, OpenAPI
+│   │   ├── user.py              # Pydantic-схемы пользователя
+│   │   ├── movie.py
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   ├── favorite.py
+│   │   └── token.py             # схемы токена и payload
+│   └── services/
+│       └── auth.py              # аутентификация и формирование токена
 ├── frontend/
-│   └── index.html               # React SPA
+│   └── index.html               # React SPA (CDN), стили, вызовы API
 ├── tests/
-│   ├── conftest.py
+│   ├── conftest.py              # SQLite для тестов, TestClient, сброс rate limit
 │   ├── api/
+│   │   ├── test_auth.py         # HTTP-регистрация и логин
+│   │   ├── test_users_api.py    # JWT и /users/me
+│   │   ├── test_movies_authz.py # права на создание фильма
+│   │   ├── test_favorites_api.py# избранное: 404, дубликат, чужая запись
+│   │   └── test_login_rate_limit.py  # ответ 429 при перегрузке логина
 │   ├── crud/
+│   │   ├── test_user_crud.py    # создание и чтение пользователя
+│   │   └── test_user_update.py  # обновление пароля через CRUD
 │   └── unit/
-├── .env.example
-├── requirements.txt
+│       └── test_security.py     # bcrypt и JWT без HTTP
 └── README.md
 ```
 
@@ -273,15 +287,17 @@ movie_library_project/
 
 ## Тесты
 
-Запуск всех тестов:
+Запуск:
 
 ```bash
 python -m pytest tests/ -q
 ```
 
-**Инфраструктура:** `tests/conftest.py` — отдельная SQLite, транзакция на тест с откатом, подмена `get_db` у приложения для `TestClient`; задаётся тестовый `SECRET_KEY`. Перед/после каждого теста сбрасывается in-memory счётчик **rate limit** на `/auth/login`, чтобы сценарии не мешали друг другу.
+**Инфраструктура:** `tests/conftest.py` — отдельная SQLite, транзакция на тест с откатом, подмена `get_db` у приложения для `TestClient`; задаётся тестовый `SECRET_KEY`. Перед/после каждого теста сбрасывается in-memory счётчик **rate limit** на `/auth/login`, чтобы сценарии не мешали друг другу. В CI убедитесь, что при импорте приложения доступен `SECRET_KEY` (в репозитории для локального прогона его задаёт `conftest.py`).
 
 **Вспомогательная функция** `api_login(client, username, password)` — получение `access_token` после успешного логина.
+
+**Учётные данные для ручной проверки** (если в вашей БД уже есть такой пользователь): логин `testuser`, пароль `admin123`. Роль суперпользователя задаётся в базе, не через публичную регистрацию.
 
 ### Перечень тестов (что покрывают)
 
@@ -307,38 +323,77 @@ python -m pytest tests/ -q
 
 Всего **17** тестов.
 
-В CI локально перед прогоном убедитесь, что для импорта приложения задан `SECRET_KEY` (в тестах значение по умолчанию подставляет `conftest.py`).
-
----
-
-<a id="more"></a>
-
-## Дополнительно
-
-- Учебные материалы: каталог `tutorial/`.
-- Англоязычная версия этого README — [ниже на этой же странице](#english).
-
 ---
 
 <a id="english"></a>
 
 # English
 
-Short duplicate of this README in English (same project, same steps).
+Short duplicate of this README in English (same project, same steps). [Russian version above](#readme-russian).
 
 ## Table of contents
 
-1. [Quick start](#quick-start-en)
-2. [Security changelog](#changelog-security-en)
-3. [Features](#features-en)
-4. [Tech stack](#tech-stack-en)
+1. [Features](#features-en)
+2. [Tech stack](#tech-stack-en)
+3. [API (short)](#api-summary-en)
+4. [Quick start](#quick-start-en)
 5. [Running backend and frontend](#run-en)
 6. [Configuration (.env)](#configuration-en)
-7. [Test credentials](#credentials-en)
-8. [API (short)](#api-summary-en)
-9. [Project structure](#project-structure-en)
-10. [Tests](#tests-en)
-11. [More](#more-en)
+7. [Security changelog](#changelog-security-en)
+8. [Project structure](#project-structure-en)
+9. [Tests](#tests-en)
+10. [Russian (above)](#readme-russian)
+
+---
+
+<a id="features-en"></a>
+
+## Features
+
+### Backend (FastAPI)
+
+- Login, registration, JWT, current user profile.
+- CRUD: users, movies, genres, directors, favorites.
+- Roles: regular user vs superuser (catalog, genres, directors).
+- SQLite by default; override with `DATABASE_URL` in `.env`.
+- Swagger UI and ReDoc.
+
+### Frontend (React SPA)
+
+- Dark theme, movie cards, favorites, modals.
+- Genres, directors, and “add movie” — superuser only.
+
+---
+
+<a id="tech-stack-en"></a>
+
+## Tech stack
+
+| Layer | Stack |
+|-------|-------|
+| Backend | FastAPI, SQLAlchemy 2, Pydantic v2, python-jose, Passlib (bcrypt), uvicorn |
+| Data | SQLite (default) |
+| Frontend | React 18 (UMD), Bootstrap 5, Babel standalone |
+
+---
+
+<a id="api-summary-en"></a>
+
+## API (short)
+
+Version prefix: **`/api/v1`**.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/auth/register` | Register |
+| POST | `/auth/login` | Obtain JWT |
+| GET | `/users/me` | Current user |
+| GET/POST | `/movies/` | List / create movie |
+| GET/POST/PUT/DELETE | `/genres/`, `/genres/{id}` | Genres |
+| GET/POST/PUT/DELETE | `/directors/`, `/directors/{id}` | Directors |
+| GET/POST/DELETE | `/favorites/` | Favorites |
+
+Full schemas: **Swagger** at `/docs`.
 
 ---
 
@@ -360,6 +415,51 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 UI: [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/) (same origin as the API, CORS-friendly). API docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+---
+
+<a id="run-en"></a>
+
+## Running backend and frontend
+
+**Option A — single server (recommended)**  
+The backend serves the UI at `/ui/`:
+
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/).
+
+**Option B — separate static server for HTML**  
+Example on port 8080:
+
+```bash
+cd frontend
+python -m http.server 8080
+```
+
+Add the frontend origin to **`BACKEND_CORS_ORIGINS`** in `.env` (e.g. `http://127.0.0.1:8080`), otherwise the browser will block credentialed requests.
+
+Another way to run the API:
+
+```bash
+python run.py
+```
+
+---
+
+<a id="configuration-en"></a>
+
+## Configuration (.env)
+
+| Variable | Purpose |
+|----------|---------|
+| `SECRET_KEY` | Required, ≥ 32 characters, JWT signing. |
+| `DATABASE_URL` | Optional; default SQLite in the project root. |
+| `BACKEND_CORS_ORIGINS` | Comma-separated allowed origins for CORS. |
+
+See **`.env.example`** for a full template.
 
 ---
 
@@ -432,123 +532,7 @@ Changes focused on vulnerabilities, API stability, and frontend alignment.
 | **Registration** | Only the intended fields are sent (no stray keys from the form). |
 | **“Add Movie” button** | Shown only for **superusers**; genre and director lists for the create form load only for them. |
 
-### Tests
-
-| Change | Description |
-|--------|-------------|
-| **`tests/conftest.py`** | Sets a test **`SECRET_KEY`** before importing the app; DB override uses the same **`get_db`** as endpoints. |
-| **New test** | Ensures a `is_superuser` flag in the registration body does **not** elevate privileges. |
-
 > Older JWTs where `sub` was a username **stop working** after this update — sign in again.
-
----
-
-<a id="features-en"></a>
-
-## Features
-
-### Backend (FastAPI)
-
-- Login, registration, JWT, current user profile.
-- CRUD: users, movies, genres, directors, favorites.
-- Roles: regular user vs superuser (catalog, genres, directors).
-- SQLite by default; override with `DATABASE_URL` in `.env`.
-- Swagger UI and ReDoc.
-
-### Frontend (React SPA)
-
-- Dark theme, movie cards, favorites, modals.
-- Genres, directors, and “add movie” — superuser only.
-
----
-
-<a id="tech-stack-en"></a>
-
-## Tech stack
-
-| Layer | Stack |
-|-------|-------|
-| Backend | FastAPI, SQLAlchemy 2, Pydantic v2, python-jose, Passlib (bcrypt), uvicorn |
-| Data | SQLite (default) |
-| Frontend | React 18 (UMD), Bootstrap 5, Babel standalone |
-
----
-
-<a id="run-en"></a>
-
-## Running backend and frontend
-
-**Option A — single server (recommended)**  
-The backend serves the UI at `/ui/`:
-
-```bash
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Open [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/).
-
-**Option B — separate static server for HTML**  
-Example on port 8080:
-
-```bash
-cd frontend
-python -m http.server 8080
-```
-
-Add the frontend origin to **`BACKEND_CORS_ORIGINS`** in `.env` (e.g. `http://127.0.0.1:8080`), otherwise the browser will block credentialed requests.
-
-Another way to run the API:
-
-```bash
-python run.py
-```
-
----
-
-<a id="configuration-en"></a>
-
-## Configuration (.env)
-
-| Variable | Purpose |
-|----------|---------|
-| `SECRET_KEY` | Required, ≥ 32 characters, JWT signing. |
-| `DATABASE_URL` | Optional; default SQLite in the project root. |
-| `BACKEND_CORS_ORIGINS` | Comma-separated allowed origins for CORS. |
-
-See **`.env.example`** for a full template.
-
----
-
-<a id="credentials-en"></a>
-
-## Test credentials
-
-For manual testing (if the user already exists in your database):
-
-- Username: `testuser`  
-- Password: `admin123`  
-
-Superuser role is set in the database, not via public registration.
-
----
-
-<a id="api-summary-en"></a>
-
-## API (short)
-
-Version prefix: **`/api/v1`**.
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/auth/register` | Register |
-| POST | `/auth/login` | Obtain JWT |
-| GET | `/users/me` | Current user |
-| GET/POST | `/movies/` | List / create movie |
-| GET/POST/PUT/DELETE | `/genres/`, `/genres/{id}` | Genres |
-| GET/POST/PUT/DELETE | `/directors/`, `/directors/{id}` | Directors |
-| GET/POST/DELETE | `/favorites/` | Favorites |
-
-Full schemas: **Swagger** at `/docs`.
 
 ---
 
@@ -558,32 +542,68 @@ Full schemas: **Swagger** at `/docs`.
 
 ```
 movie_library_project/
+├── main.py                      # uvicorn entry (0.0.0.0:8000)
+├── run.py                       # dev server with autoreload (127.0.0.1)
+├── requirements.txt             # Python dependencies
+├── .env.example                 # sample env vars (no real secrets)
 ├── app/
+│   ├── main.py                  # FastAPI app: CORS, /, /ui/ static, OpenAPI
 │   ├── api/
-│   │   ├── api.py
-│   │   ├── dependencies.py      # JWT → current user
-│   │   └── endpoints/             # auth, users, movies, genres, directors, favorites
+│   │   ├── api.py               # mounts routers under /api/v1
+│   │   ├── dependencies.py      # JWT → current user / superuser
+│   │   └── endpoints/
+│   │       ├── auth.py          # register and login
+│   │       ├── users.py         # /me profile and user management
+│   │       ├── movies.py        # movie list and CRUD (superuser rules)
+│   │       ├── genres.py        # genres
+│   │       ├── directors.py     # directors
+│   │       └── favorites.py     # favorites
 │   ├── core/
-│   │   ├── config.py            # settings from .env
-│   │   ├── rate_limit.py        # login rate limit
-│   │   └── security.py          # bcrypt, JWT
+│   │   ├── config.py            # settings from .env (SECRET_KEY, CORS, DB)
+│   │   ├── rate_limit.py        # rate limit for POST /login by IP
+│   │   └── security.py          # bcrypt and JWT helpers
 │   ├── crud/
+│   │   ├── base.py              # generic CRUD base class
+│   │   ├── user.py              # user persistence
+│   │   ├── movie.py             # movie persistence
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   └── favorite.py
 │   ├── db/
-│   │   ├── session.py           # engine, SessionLocal, get_db
-│   │   └── ...
+│   │   ├── base.py              # imports models into metadata
+│   │   ├── base_class.py        # SQLAlchemy declarative base
+│   │   └── session.py           # engine, SessionLocal, get_db dependency
 │   ├── models/
+│   │   ├── __init__.py          # exports ORM models
+│   │   ├── user.py
+│   │   ├── movie.py
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   └── favorite.py
 │   ├── schemas/
-│   ├── services/auth.py
-│   └── main.py                  # FastAPI, CORS, /ui/, OpenAPI
+│   │   ├── user.py              # Pydantic user schemas
+│   │   ├── movie.py
+│   │   ├── genre.py
+│   │   ├── director.py
+│   │   ├── favorite.py
+│   │   └── token.py             # token / payload schemas
+│   └── services/
+│       └── auth.py              # login flow and access token
 ├── frontend/
-│   └── index.html               # React SPA
+│   └── index.html               # React SPA (CDN), styles, API calls
 ├── tests/
-│   ├── conftest.py
+│   ├── conftest.py              # test DB, TestClient, rate-limit reset
 │   ├── api/
+│   │   ├── test_auth.py         # HTTP register and login
+│   │   ├── test_users_api.py    # JWT and /users/me
+│   │   ├── test_movies_authz.py # movie create authorization
+│   │   ├── test_favorites_api.py# favorites: 404, duplicate, foreign delete
+│   │   └── test_login_rate_limit.py  # 429 when login flood
 │   ├── crud/
+│   │   ├── test_user_crud.py    # user create and read
+│   │   └── test_user_update.py  # password update via CRUD
 │   └── unit/
-├── .env.example
-├── requirements.txt
+│       └── test_security.py     # bcrypt and JWT without HTTP
 └── README.md
 ```
 
@@ -593,15 +613,17 @@ movie_library_project/
 
 ## Tests
 
-Run the full suite:
+Run:
 
 ```bash
 python -m pytest tests/ -q
 ```
 
-**Infrastructure:** `tests/conftest.py` — isolated SQLite, per-test transaction rollback, `get_db` override for `TestClient`, test `SECRET_KEY`. The in-memory **login rate limit** bucket is cleared before and after every test so scenarios do not interfere.
+**Infrastructure:** `tests/conftest.py` — isolated SQLite, per-test transaction rollback, `get_db` override for `TestClient`, test `SECRET_KEY`. The in-memory **login rate limit** bucket is cleared before and after every test so scenarios do not interfere. In CI, ensure `SECRET_KEY` is available when importing the app (the repo’s `conftest.py` sets a default for local runs).
 
 **Helper:** `api_login(client, username, password)` returns an `access_token` after a successful login.
+
+**Manual check credentials** (if that user exists in your DB): username `testuser`, password `admin123`. Superuser role is set in the database, not via public registration.
 
 ### Test inventory (coverage)
 
@@ -626,14 +648,3 @@ python -m pytest tests/ -q
 | | `test_jwt_creation` | JWT with `sub` encodes and decodes correctly. |
 
 **17** tests total.
-
-Ensure `SECRET_KEY` is available when importing the app in CI (the default in `conftest.py` is enough for local runs).
-
----
-
-<a id="more-en"></a>
-
-## More
-
-- Tutorials: `tutorial/` directory.
-- Russian version of this README: [scroll up](#readme-russian).
