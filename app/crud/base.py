@@ -1,18 +1,15 @@
-from typing import Generic, Type, TypeVar, Optional, List
+from typing import Generic, List, Optional, Type, TypeVar
+
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType")
 UpdateSchemaType = TypeVar("UpdateSchemaType")
 
+MAX_PAGE_SIZE = 200
 
-# Базовый класс для CRUD операций
-# Предоставляет универсальные методы для создания, чтения, обновления и удаления объектов в базе данных
-# Использует дженерики Python для обеспечения типобезопасности и переиспользования кода
-# Параметры типов:
-# - ModelType: класс SQLAlchemy модели
-# - CreateSchemaType: Pydantic схема для создания объекта
-# - UpdateSchemaType: Pydantic схема для обновления объекта
+
 class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
@@ -23,6 +20,8 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def get_multi(
         self, db: Session, *, skip: int = 0, limit: int = 100
     ) -> List[ModelType]:
+        skip = max(0, skip)
+        limit = min(max(1, limit), MAX_PAGE_SIZE)
         return db.query(self.model).offset(skip).limit(limit).all()
 
     def create(self, db: Session, *, obj_in: CreateSchemaType) -> ModelType:
@@ -35,12 +34,14 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def update(
         self, db: Session, *, db_obj: ModelType, obj_in: UpdateSchemaType | dict
     ) -> ModelType:
-        obj_data = db_obj.model_dump()
         if isinstance(obj_in, dict):
             update_data = obj_in
         else:
             update_data = obj_in.model_dump(exclude_unset=True)
-        for field in obj_data:
+
+        mapper = sa_inspect(db_obj).mapper
+        for column in mapper.columns:
+            field = column.key
             if field in update_data:
                 setattr(db_obj, field, update_data[field])
         db.add(db_obj)
@@ -49,7 +50,9 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return db_obj
 
     def remove(self, db: Session, *, id: int) -> ModelType:
-        obj = db.query(self.model).get(id)
+        obj = db.get(self.model, id)
+        if obj is None:
+            raise ValueError(f"{self.model.__name__} with id={id} not found")
         db.delete(obj)
         db.commit()
         return obj

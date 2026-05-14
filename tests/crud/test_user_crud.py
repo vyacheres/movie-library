@@ -15,6 +15,7 @@ def test_create_user(db: Session):
     assert user.email == user_in.email
     assert user.full_name == user_in.full_name
     assert hasattr(user, "hashed_password")
+    assert user.is_superuser is False
 
 
 def test_get_user(db: Session):

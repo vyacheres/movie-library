@@ -13,11 +13,11 @@ def test_password_hashing():
 
 
 def test_jwt_creation():
-    data = {"sub": "testuser"}
+    data = {"sub": "42"}
     expires = timedelta(minutes=30)
     token = security.create_access_token(data, expires_delta=expires)
     payload = jwt.decode(
         token, config.settings.SECRET_KEY, algorithms=[config.settings.ALGORITHM]
     )
     token_data = TokenPayload(**payload)
-    assert token_data.sub == "testuser"
+    assert token_data.sub == "42"

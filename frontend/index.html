@@ -169,7 +169,11 @@
         
         // API_URL - базовый URL бэкенда
         // Все API запросы будут отправляться на этот адрес
-        const API_URL = 'http://127.0.0.1:8000/api/v1';
+        const API_BASE =
+            typeof window !== 'undefined' && window.location.protocol === 'file:'
+                ? 'http://127.0.0.1:8000'
+                : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
+        const API_URL = `${API_BASE}/api/v1`;
 
         // ============================================================
         // КОНТЕКСТ АУТЕНТИФИКАЦИИ
@@ -195,36 +199,42 @@
          * - Парсит ответ и выбрасывает ошибки с деталями
          */
         const api = async (endpoint, options = {}) => {
-            // Получаем токен из localStorage браузера
             const token = localStorage.getItem('token');
-            
-            // Формируем заголовки запроса
+
             const headers = {
-                'Content-Type': 'application/json', // JSON по умолчанию
-                // Если есть токен, добавляем его в заголовок Authorization
+                'Content-Type': 'application/json',
                 ...(token && { Authorization: `Bearer ${token}` }),
-                // Дополнительные заголовки из параметров
                 ...options.headers
             };
 
-            // Выполняем запрос к API
             const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
 
-            // Если статус 401 (Unauthorized) - токен истёк или недействителен
             if (response.status === 401) {
-                localStorage.removeItem('token'); // Удаляем токен
-                window.location.reload(); // Перезагружаем страницу
+                localStorage.removeItem('token');
+                window.location.reload();
+                throw new Error('Session expired');
             }
 
-            // Если запрос не успешен (4xx, 5xx)
             if (!response.ok) {
-                const error = await response.json();
-                // Выбрасываем ошибку с текстом из ответа или стандартным сообщением
-                throw new Error(error.detail || 'Something went wrong');
+                let message = 'Something went wrong';
+                try {
+                    const error = await response.json();
+                    if (Array.isArray(error.detail)) {
+                        message = error.detail.map((d) => (d.msg ? `${d.loc}: ${d.msg}` : JSON.stringify(d))).join('; ');
+                    } else if (typeof error.detail === 'string') {
+                        message = error.detail;
+                    }
+                } catch (_) {
+                    /* non-JSON body */
+                }
+                throw new Error(message);
             }
 
-            // Возвращаем данные в формате JSON
-            return response.json();
+            if (response.status === 204) {
+                return null;
+            }
+            const text = await response.text();
+            return text ? JSON.parse(text) : null;
         };
 
         // ============================================================
@@ -269,7 +279,12 @@
                         // Отправляем данные на эндпоинт регистрации
                         await api('/auth/register', {
                             method: 'POST',
-                            body: JSON.stringify(formData)
+                            body: JSON.stringify({
+                                username: formData.username,
+                                password: formData.password,
+                                email: formData.email,
+                                ...(formData.full_name ? { full_name: formData.full_name } : {}),
+                            }),
                         });
                         // После успешной регистрации переключаем на вход
                         setIsRegister(false);
@@ -512,9 +527,11 @@
             // При монтировании компонента загружаем данные
             React.useEffect(() => {
                 loadMovies();
-                loadGenres();
-                loadDirectors();
-            }, []);
+                if (isSuperuser) {
+                    loadGenres();
+                    loadDirectors();
+                }
+            }, [isSuperuser]);
 
             /**
              * Загрузка списка фильмов с API
@@ -622,9 +639,11 @@
                     {/* Заголовок и кнопка добавления */}
                     <div className="d-flex justify-content-between align-items-center mb-4">
                         <h2>Movies</h2>
-                        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                            + Add Movie
-                        </button>
+                        {isSuperuser && (
+                            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                                + Add Movie
+                            </button>
+                        )}
                     </div>
 
                     {/* Сетка карточек фильмов */}

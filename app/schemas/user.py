@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserBase(BaseModel):
@@ -12,7 +13,6 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     favorite_genre: Optional[str] = None
-    is_superuser: bool = False
 
 
 class UserUpdate(UserBase):
@@ -28,8 +28,7 @@ class UserInDBBase(UserBase):
     is_superuser: bool
     favorite_genre: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class User(UserInDBBase):

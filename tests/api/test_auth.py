@@ -3,9 +3,6 @@ from sqlalchemy.orm import Session
 from app.schemas.user import UserCreate
 from app.crud.user import crud_user
 from app.core.config import settings
-from app.models.user import User
-
-
 def test_register_user(client: TestClient, db: Session):
     response = client.post(
         f"{settings.API_V1_STR}/auth/register",
@@ -41,3 +38,19 @@ def test_login_user(client: TestClient, db: Session):
     tokens = response.json()
     assert "access_token" in tokens
     assert tokens["token_type"] == "bearer"
+
+
+def test_register_ignores_superuser_flag(client: TestClient, db: Session):
+    response = client.post(
+        f"{settings.API_V1_STR}/auth/register",
+        json={
+            "username": "notadmin",
+            "email": "notadmin@test.com",
+            "password": "testpassword",
+            "is_superuser": True,
+        },
+    )
+    assert response.status_code == 200
+    user = crud_user.get_by_username(db, username="notadmin")
+    assert user is not None
+    assert user.is_superuser is False

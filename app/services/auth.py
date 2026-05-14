@@ -4,8 +4,9 @@ from datetime import timedelta
 # Импорт HTTPException и статусов из FastAPI
 from fastapi import HTTPException, status
 
-# Импорт модуля безопасности
+# Импорт модуля безопасности и настроек
 from app.core import security
+from app.core.config import settings
 
 # Импорт модели пользователя
 from app.models.user import User
@@ -43,12 +44,10 @@ def login_user(db, username: str, password: str) -> Token:
             headers={"WWW-Authenticate": "Bearer"},
         )
     # Устанавливаем время жизни токена
-    access_token_expires = timedelta(
-        minutes=security.settings.ACCESS_TOKEN_EXPIRE_MINUTES
-    )
-    # Создаем JWT токен с именем пользователя и временем жизни
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # sub — стабильный идентификатор пользователя (не username)
     access_token = security.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
     # Возвращаем токен с типом bearer
     return Token(access_token=access_token, token_type="bearer")

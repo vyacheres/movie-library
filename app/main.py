@@ -1,31 +1,29 @@
-# Импорт FastAPI для создания веб-приложения
 from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
-# Импорт роутера API
 from app.api.api import api_router
-
-# Импорт настроек приложения
 from app.core.config import settings
 
-# Создание экземпляра FastAPI с названием проекта и версией из настроек
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
 
-# Настройка CORS для разрешения запросов с фронтенда
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Подключение роутера API с префиксом из настроек (обычно "/api/v1")
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+_frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+if _frontend_dir.is_dir():
+    app.mount("/ui", StaticFiles(directory=str(_frontend_dir), html=True), name="ui")
 
-# Настройка Swagger с OAuth2 авторизацией
+
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -39,14 +37,22 @@ def custom_openapi():
             "type": "apiKey",
             "name": "Authorization",
             "in": "header",
-            "description": "JWT token. Example: Bearer your_token_here"
+            "description": "JWT token. Example: Bearer your_token_here",
         }
     }
-    # Добавляем security ко всем роутерам
-    for path in openapi_schema["paths"]:
-        for method in openapi_schema["paths"][path]:
-            if method in ["get", "post", "put", "delete", "patch"]:
-                openapi_schema["paths"][path][method]["security"] = [{"Bearer Auth": []}]
+    public_paths = {
+        f"{settings.API_V1_STR}/auth/login",
+        f"{settings.API_V1_STR}/auth/register",
+    }
+    public_exact = {"/", "/docs", "/openapi.json", "/redoc"}
+    for path, path_item in openapi_schema.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if method not in ("get", "post", "put", "delete", "patch"):
+                continue
+            if path in public_exact or path in public_paths:
+                operation.pop("security", None)
+            else:
+                operation["security"] = [{"Bearer Auth": []}]
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
@@ -54,8 +60,10 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 
-# Эндпоинт для главной страницы
 @app.get("/")
 def read_root():
-    # Возвращает приветственное сообщение
-    return {"message": "Welcome to Movie Library API"}
+    return {
+        "message": "Welcome to Movie Library API",
+        "docs": "/docs",
+        "frontend": "/ui/",
+    }

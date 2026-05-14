@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
+
+from app.core.security import get_password_hash
 from app.crud.base import CRUDBase
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.core.security import get_password_hash
 
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
@@ -18,13 +19,21 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
             email=obj_in.email,
             full_name=obj_in.full_name,
             hashed_password=get_password_hash(obj_in.password),
-            is_superuser=obj_in.is_superuser,
+            is_superuser=False,
             favorite_genre=obj_in.favorite_genre,
         )
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
+
+    def update(self, db: Session, *, db_obj: User, obj_in: UserUpdate) -> User:
+        update_data = obj_in.model_dump(exclude_unset=True)
+        if "password" in update_data:
+            raw = update_data.pop("password")
+            if raw is not None:
+                update_data["hashed_password"] = get_password_hash(raw)
+        return super().update(db, db_obj=db_obj, obj_in=update_data)
 
 
 crud_user = CRUDUser(User)

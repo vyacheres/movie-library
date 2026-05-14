@@ -1,30 +1,43 @@
-# Импорт BaseSettings из pydantic_settings для создания класса настроек
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Класс настроек приложения, наследующий BaseSettings
-# Позволяет загружать настройки из переменных окружения и .env файла
 class Settings(BaseSettings):
-    # Название проекта
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     PROJECT_NAME: str = "Movie Library"
-    # Префикс для версии API
     API_V1_STR: str = "/api/v1"
 
-    # Настройки базы данных
     DATABASE_URL: str = "sqlite:///./movie_library.db"
 
-    # Настройки безопасности
-    # Секретный ключ для подписи JWT токенов (должен быть сложным и секретным в продакшене)
-    SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-    # Алгоритм шифрования для JWT
+    # Обязательный ключ подписи JWT (минимум 32 символа). Задайте в .env для любого окружения.
+    SECRET_KEY: str = Field(..., min_length=32)
     ALGORITHM: str = "HS256"
-    # Время жизни токена доступа в минутах
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Список origin для CORS через запятую (нельзя использовать * вместе с credentials).
+    BACKEND_CORS_ORIGINS: str = Field(
+        default=(
+            "http://127.0.0.1:5500,http://localhost:5500,"
+            "http://127.0.0.1:8000,http://localhost:8000,"
+            "http://127.0.0.1:3000,http://localhost:3000"
+        )
+    )
 
-# Создание экземпляра настроек
-# При создании экземпляра BaseSettings автоматически загружает значения из:
-# 1. Переменных окружения
-# 2. Файла .env в корне проекта
-# 3. Значений по умолчанию, указанных в классе
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.BACKEND_CORS_ORIGINS.split(",") if o.strip()]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def strip_cors_string(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+
 settings = Settings()
