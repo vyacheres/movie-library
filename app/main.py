@@ -6,6 +6,11 @@ from pathlib import Path
 
 from app.api.api import api_router
 from app.core.config import settings
+from app.db.session import engine
+from app.db import base  # registers all models with Base.metadata  # noqa: F401
+from app.db.base_class import Base
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
 

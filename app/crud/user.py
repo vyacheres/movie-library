@@ -28,12 +28,8 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         db.refresh(db_obj)
         return db_obj
 
-    def update(self, db: Session, *, db_obj: User, obj_in: UserUpdate) -> User:
-        update_data = obj_in.model_dump(exclude_unset=True)
-        if "password" in update_data:
-            raw = update_data.pop("password")
-            if raw is not None:
-                update_data["hashed_password"] = get_password_hash(raw)
+    def update(self, db: Session, *, db_obj: User, obj_in: UserUpdate | dict) -> User:
+        update_data = obj_in if isinstance(obj_in, dict) else obj_in.model_dump(exclude_unset=True)
         return super().update(db, db_obj=db_obj, obj_in=update_data)
 
 
