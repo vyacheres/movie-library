@@ -10,10 +10,12 @@ class Movie(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True, nullable=False)
     description = Column(Text, nullable=True)
+    year = Column(Integer, nullable=True)
     release_date = Column(DateTime, nullable=True)
-    duration = Column(Integer, nullable=True)  # in minutes
+    duration = Column(Integer, nullable=True)
     rating = Column(Float, nullable=True)
     poster_url = Column(String, nullable=True)
+    trailer = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

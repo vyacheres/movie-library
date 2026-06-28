@@ -17,10 +17,11 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         db_obj = User(
             username=obj_in.username,
             email=obj_in.email,
-            full_name=obj_in.full_name,
+            first_name=obj_in.first_name,
+            last_name=obj_in.last_name,
             hashed_password=get_password_hash(obj_in.password),
             is_superuser=False,
-            favorite_genre=obj_in.favorite_genre,
+            favorite_genre_id=obj_in.favorite_genre_id,
         )
         db.add(db_obj)
         db.commit()

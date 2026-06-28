@@ -28,10 +28,12 @@ class Director(DirectorBase):
 class MovieBase(BaseModel):
     title: str
     description: Optional[str] = None
+    year: Optional[int] = None
     release_date: Optional[datetime] = None
     duration: Optional[int] = None
     rating: Optional[float] = None
     poster_url: Optional[str] = None
+    trailer: Optional[str] = None
 
 
 class MovieCreate(MovieBase):

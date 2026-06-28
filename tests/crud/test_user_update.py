@@ -1,6 +1,7 @@
 from app.core import security
+from app.core.security import get_password_hash
 from app.crud.user import crud_user
-from app.schemas.user import UserCreate, UserUpdate
+from app.schemas.user import UserCreate
 
 
 def test_user_update_rehashes_password(db):
@@ -9,7 +10,7 @@ def test_user_update_rehashes_password(db):
         obj_in=UserCreate(
             username="pwdup",
             email="pwdup@test.com",
-            password="oldpass",
+            password="oldpassword",
         ),
     )
     old_hash = user.hashed_password
@@ -17,12 +18,8 @@ def test_user_update_rehashes_password(db):
     updated = crud_user.update(
         db,
         db_obj=user,
-        obj_in=UserUpdate(
-            username=user.username,
-            email=user.email,
-            password="brandnewpass",
-        ),
+        obj_in={"hashed_password": get_password_hash("brandnewpass")},
     )
     assert updated.hashed_password != old_hash
     assert security.verify_password("brandnewpass", updated.hashed_password)
-    assert not security.verify_password("oldpass", updated.hashed_password)
+    assert not security.verify_password("oldpassword", updated.hashed_password)

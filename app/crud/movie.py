@@ -6,17 +6,14 @@ from app.schemas.movie import MovieCreate, MovieUpdate
 
 
 class CRUDMovie(CRUDBase[Movie, MovieCreate, MovieUpdate]):
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100):
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100, sort_new: bool = False):
         skip = max(0, skip)
         limit = min(max(1, limit), MAX_PAGE_SIZE)
-        return (
-            db.query(self.model)
-            .options(joinedload(Movie.genre), joinedload(Movie.director))
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
-    
+        q = db.query(self.model).options(joinedload(Movie.genre), joinedload(Movie.director))
+        if sort_new:
+            q = q.order_by(self.model.year.desc().nullslast(), self.model.created_at.desc())
+        return q.offset(skip).limit(limit).all()
+
     def get(self, db: Session, *, id: int):
         return (
             db.query(self.model)
