@@ -44,10 +44,10 @@
 
 | Backend | Frontend |
 |---------|----------|
-| Регистрация и вход, **JWT**, профиль `/users/me` | Тёмная тема, карточки фильмов, модальные окна |
-| CRUD: фильмы, жанры, режиссёры, избранное | Избранное в один клик |
-| Роли: пользователь и **суперпользователь** | Управление каталогом — только для superuser |
-| **Swagger** / **ReDoc**, rate limit на login | SPA на React 18 (CDN) + Bootstrap 5 |
+| Регистрация, вход, **JWT access + refresh**, профиль `/users/me` | Тёмная тема, карточки фильмов, модальные окна |
+| CRUD: фильмы (с `year` и `trailer`), жанры, режиссёры, избранное | Избранное в один клик |
+| Смена пароля `/users/me/password`, роли: пользователь и **суперпользователь** | Управление каталогом — только для superuser |
+| **Swagger** / **ReDoc**, rate limit на login, пагинация по 12 | SPA на React 18 (CDN) + Bootstrap 5 |
 
 ---
 
@@ -80,15 +80,20 @@
 
 | | Метод | Путь | Описание |
 |---|--------|------|----------|
-| 🔓 | `POST` | `/auth/register` | Регистрация |
-| 🔓 | `POST` | `/auth/login` | JWT (OAuth2 form) |
+| 🔓 | `POST` | `/auth/register` | Регистрация (`first_name`, `last_name`, `favorite_genre_id`) |
+| 🔓 | `POST` | `/auth/login` | JWT access + refresh (OAuth2 form) |
+| 🔓 | `POST` | `/auth/refresh` | Обновление пары токенов по refresh token |
 | 🔒 | `GET` | `/users/me` | Текущий пользователь |
-| ○ | `GET` | `/movies/` | Список фильмов |
-| ★ | `POST` | `/movies/` | Создать фильм (superuser) |
+| 🔒 | `PUT` | `/users/me` | Обновление профиля (все поля опциональны) |
+| 🔒 | `PUT` | `/users/me/password` | Смена пароля |
+| ○ | `GET` | `/movies/?page=1&status=new` | Список фильмов, страница по 12; `status=new` — новинки |
+| ★ | `POST` | `/movies/` | Создать фильм (superuser); поля `year` и `trailer` |
 | ○ | `GET/POST/PUT/DELETE` | `/genres/`, `/directors/` | Справочники |
-| 🔒 | `GET/POST/DELETE` | `/favorites/` | Избранное |
+| 🔒 | `GET` | `/favorites/` | Список избранного |
+| 🔒 | `POST` | `/favorites/movies/{movie_id}` | Добавить фильм в избранное |
+| 🔒 | `DELETE` | `/favorites/movies/{movie_id}` | Удалить фильм из избранного |
 
-🔓 — без токена · 🔒 — Bearer JWT · ★ — superuser
+🔓 — без токена · 🔒 — Bearer JWT · ★ — superuser · ○ — публичный
 
 Полные схемы: **[Swagger `/docs`](http://127.0.0.1:8000/docs)** · [ReDoc `/redoc`](http://127.0.0.1:8000/redoc)
 
@@ -198,6 +203,8 @@ BACKEND_CORS_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
 |------------|:-----------:|----------|
 | `SECRET_KEY` | ✅ | Ключ подписи JWT (≥ 32 символов) |
 | `DATABASE_URL` | — | Строка подключения (по умолчанию SQLite в корне) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | — | Время жизни access-токена (по умолчанию 30 мин) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | — | Время жизни refresh-токена (по умолчанию 7 дней) |
 | `BACKEND_CORS_ORIGINS` | — | Origins через запятую для CORS |
 
 Шаблон: [`.env.example`](.env.example)
@@ -218,8 +225,18 @@ BACKEND_CORS_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
 | Изменение | Описание |
 |-----------|----------|
 | **JWT `sub` = id пользователя** | В токен записывается числовой id, а не имя пользователя. |
+| **Refresh token** | `POST /auth/login` возвращает `access_token` + `refresh_token`; `/auth/refresh` выдаёт новую пару. |
+| **Смена пароля** | `PUT /users/me/password` — отдельный маршрут; требует текущий пароль. |
 | **Ответ при невалидном токене** | Неверный или просроченный JWT → **401** и `WWW-Authenticate: Bearer`. |
 | **Обязательный `SECRET_KEY`** | Ключ из `.env`, минимум 32 символа (см. `.env.example`). |
+
+### Модели данных
+
+| Изменение | Описание |
+|-----------|----------|
+| **Поля пользователя** | Вместо `full_name` — отдельные `first_name` и `last_name`. Любимый жанр: `favorite_genre_id` (FK → genres). |
+| **Поля фильма** | Добавлены `year` (Integer) и `trailer` (String, URL). |
+| **`UserUpdate` — частичное обновление** | Все поля схемы (`username`, `email`, `first_name`, `last_name`, `favorite_genre_id`) опциональны; можно изменить одно поле не трогая остальные. |
 
 ### Регистрация и роли
 
@@ -238,17 +255,16 @@ BACKEND_CORS_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
 
 | Изменение | Описание |
 |-----------|----------|
-| **Исправлено обновление сущностей** | `update` без `model_dump()` у ORM-моделей; работает **PUT `/users/me`**. |
-| **Пароль при обновлении профиля** | `password` → `hashed_password` (bcrypt) в `CRUDUser.update`. |
-| **Пагинация** | Ограничен максимальный `limit` в списках. |
+| **Исправлено обновление сущностей** | `CRUDBase.update` / `CRUDUser.update` принимают Pydantic-схему или `dict`. |
+| **Пагинация фильмов** | Параметр `page` (стр. 1, 2, …), 12 фильмов на страницу. `?status=new` — сортировка по `year DESC`. |
 
 ### Избранное
 
 | Изменение | Описание |
 |-----------|----------|
+| **Маршруты** | Добавление и удаление через `/favorites/movies/{movie_id}` (вместо тела запроса). |
 | **Проверка фильма** | Несуществующий фильм → **404**. |
 | **Ошибки БД** | Unique/FK → **400**, логирование вместо `print`. |
-| **Схема запроса** | `FavoriteCreate` — только `movie_id`; `user_id` из JWT. |
 
 ### Нагрузка и обслуживание
 
@@ -269,6 +285,8 @@ BACKEND_CORS_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
 | **Ошибки FastAPI** | Разбор `detail` как строки или массива (422). |
 | **Сессия после 401** | Сброс токена и перезагрузка без «мигания» UI. |
 | **«Add Movie»** | Только для superuser. |
+| **Длина пароля** | `UserCreate`/`UserUpdate` ограничивают пароль 8–72 байтами (лимит bcrypt); слишком длинный пароль при логине не валит запрос с 500. |
+| **Создание/обновление фильма** | `genre_id`/`director_id` проверяются на существование — несуществующий ID даёт `400`, а не `IntegrityError`/500. |
 
 > Старые JWT, где в `sub` было имя пользователя, **перестают действовать** — выполните вход заново.
 
@@ -375,10 +393,10 @@ Short project overview in English. [Русская версия](#readme-russian
 
 | Backend | Frontend |
 |---------|----------|
-| Registration, login, **JWT**, `/users/me` | Dark theme, movie cards, modals |
-| CRUD: movies, genres, directors, favorites | One-click favorites |
-| User vs **superuser** roles | Catalog admin UI for superusers |
-| **Swagger** / **ReDoc**, login rate limit | React 18 (CDN) + Bootstrap 5 |
+| Registration, login, **JWT access + refresh**, `/users/me` | Dark theme, movie cards, modals |
+| CRUD: movies (with `year` & `trailer`), genres, directors, favorites | One-click favorites |
+| Password change `/users/me/password`, user vs **superuser** roles | Catalog admin UI for superusers |
+| **Swagger** / **ReDoc**, login rate limit, page-based pagination (12/page) | React 18 (CDN) + Bootstrap 5 |
 
 ---
 
@@ -403,11 +421,18 @@ Prefix: **`/api/v1`** — see [Swagger](http://127.0.0.1:8000/docs) for full sch
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/auth/register`, `/auth/login` | Register / JWT |
-| `GET` | `/users/me` | Current user |
-| `GET/POST` | `/movies/` | List / create (superuser for POST) |
+| `POST` | `/auth/register` | Register (`first_name`, `last_name`, `favorite_genre_id`) |
+| `POST` | `/auth/login` | JWT access + refresh token pair |
+| `POST` | `/auth/refresh` | Rotate token pair via refresh token |
+| `GET` | `/users/me` | Current user profile |
+| `PUT` | `/users/me` | Update profile (all fields optional) |
+| `PUT` | `/users/me/password` | Change password |
+| `GET` | `/movies/?page=1&status=new` | Paginated list (12/page); `status=new` sorts by newest |
+| `POST` | `/movies/` | Create movie — superuser; supports `year` and `trailer` |
 | `GET/POST/PUT/DELETE` | `/genres/`, `/directors/` | Reference data |
-| `GET/POST/DELETE` | `/favorites/` | Favorites |
+| `GET` | `/favorites/` | List favorites |
+| `POST` | `/favorites/movies/{movie_id}` | Add movie to favorites |
+| `DELETE` | `/favorites/movies/{movie_id}` | Remove movie from favorites |
 
 ---
 
@@ -460,8 +485,10 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 | Variable | Required | Purpose |
 |----------|:--------:|---------|
-| `SECRET_KEY` | ✅ | JWT signing key |
-| `DATABASE_URL` | — | DB connection string |
+| `SECRET_KEY` | ✅ | JWT signing key (≥ 32 chars) |
+| `DATABASE_URL` | — | DB connection string (default: SQLite) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | — | Access token lifetime (default: 30 min) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | — | Refresh token lifetime (default: 7 days) |
 | `BACKEND_CORS_ORIGINS` | — | CORS origins (comma-separated) |
 
 ---
@@ -473,7 +500,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 <details>
 <summary><strong>Expand security & compatibility changelog</strong></summary>
 
-Highlights: JWT `sub` = user id · mandatory `SECRET_KEY` · no superuser via registration · explicit CORS · fixed CRUD update · favorites validation · login rate limit · UI at `/ui/`.
+Highlights: JWT `sub` = user id · access + refresh token pair · `/auth/refresh` · `/users/me/password` · `first_name`/`last_name`/`favorite_genre_id` on User · `year`/`trailer` on Movie · partial `UserUpdate` (all fields optional) · favorites via `/favorites/movies/{id}` · page-based pagination (12/page) with `status=new` · mandatory `SECRET_KEY` · no superuser via registration · explicit CORS · login rate limit · UI at `/ui/`.
 
 > Legacy JWTs with username in `sub` are invalid — sign in again.
 
